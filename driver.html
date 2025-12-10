@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Driver Bus Tracker</title>
+    <style>
+        body {
+            font-family: Arial;
+            text-align: center;
+            padding: 30px;
+            background: #f1f5ff;
+        }
+        h2 {
+            color: #004aad;
+        }
+        button {
+            background: #004aad;
+            color: white;
+            padding: 15px 30px;
+            font-size: 18px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 25px;
+        }
+        button:active {
+            background: #00337a;
+        }
+        .status {
+            margin-top: 15px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2>Driver Location Tracker</h2>
+    <p>Press the button to start sending live GPS</p>
+
+    <button id="trackBtn">Start Tracking Bus</button>
+    <p class="status" id="status">Not Tracking</p>
+
+    <!-- Firebase -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCesQtDSP9MMYPpb075z7Qjru1Hp5kYxrw",
+            authDomain: "smartschoolbus-46e3c.firebaseapp.com",
+            databaseURL: "https://smartschoolbus-46e3c-default-rtdb.firebaseio.com",
+            projectId: "smartschoolbus-46e3c",
+            storageBucket: "smartschoolbus-46e3c.firebasestorage.app",
+            messagingSenderId: "800303812272",
+            appId: "1:800303812272:web:e74f40e821954c333ab575"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        const trackBtn = document.getElementById("trackBtn");
+        const statusText = document.getElementById("status");
+
+        let tracking = false;
+        let watchId = null;
+
+        trackBtn.addEventListener("click", () => {
+            if (!tracking) {
+                tracking = true;
+                startTracking();
+                trackBtn.textContent = "Stop Tracking";
+                statusText.textContent = "Tracking Live...";
+            } else {
+                tracking = false;
+                stopTracking();
+                trackBtn.textContent = "Start Tracking Bus";
+                statusText.textContent = "Not Tracking";
+            }
+        });
+
+        function startTracking() {
+            if (!navigator.geolocation) {
+                alert("GPS not supported on this device");
+                return;
+            }
+
+            watchId = navigator.geolocation.watchPosition((pos) => {
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+
+                // Update bus1 location in Firebase 🚍
+                update(ref(db, "buses/bus1"), { lat, lng });
+
+            }, (err) => {
+                console.error(err);
+                alert("Unable to get location!");
+            }, {
+                enableHighAccuracy: true,
+                maximumAge: 0,
+                timeout: 5000
+            });
+        }
+
+        function stopTracking() {
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+            }
+        }
+    </script>
+
+</body>
+</html>
