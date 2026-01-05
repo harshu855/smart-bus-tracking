@@ -1,112 +1,121 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Driver Bus Tracker</title>
+    <title>Smart School Bus Tracking</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
     <style>
         body {
-            font-family: Arial;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        h1 {
             text-align: center;
-            padding: 30px;
-            background: #f1f5ff;
-        }
-        h2 {
-            color: #004aad;
-        }
-        button {
             background: #004aad;
             color: white;
-            padding: 15px 30px;
-            font-size: 18px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            margin-top: 25px;
+            padding: 12px;
+            margin: 0;
         }
-        button:active {
-            background: #00337a;
-        }
-        .status {
-            margin-top: 15px;
-            font-size: 18px;
+        #map {
+            height: calc(100vh - 60px);
+            width: 100%;
         }
     </style>
 </head>
 
 <body>
 
-    <h2>Driver Location Tracker</h2>
-    <p>Press the button to start sending live GPS</p>
+<h1>Smart School Bus Live Tracking</h1>
+<div id="map"></div>
 
-    <button id="trackBtn">Start Tracking Bus</button>
-    <p class="status" id="status">Not Tracking</p>
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-    <!-- Firebase -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+<!-- Firebase -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyCesQtDSP9MMYPpb075z7Qjru1Hp5kYxrw",
-            authDomain: "smartschoolbus-46e3c.firebaseapp.com",
-            databaseURL: "https://smartschoolbus-46e3c-default-rtdb.firebaseio.com",
-            projectId: "smartschoolbus-46e3c",
-            storageBucket: "smartschoolbus-46e3c.firebasestorage.app",
-            messagingSenderId: "800303812272",
-            appId: "1:800303812272:web:e74f40e821954c333ab575"
-        };
+const firebaseConfig = {
+    apiKey: "AIzaSyCesQtDSP9MMYPpb075z7Qjru1Hp5kYxrw",
+    authDomain: "smartschoolbus-46e3c.firebaseapp.com",
+    databaseURL: "https://smartschoolbus-46e3c-default-rtdb.firebaseio.com",
+    projectId: "smartschoolbus-46e3c",
+    storageBucket: "smartschoolbus-46e3c.firebasestorage.app",
+    messagingSenderId: "800303812272",
+    appId: "1:800303812272:web:e74f40e821954c333ab575"
+};
 
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
-        const trackBtn = document.getElementById("trackBtn");
-        const statusText = document.getElementById("status");
+// Map
+const map = L.map("map").setView([13.0827, 80.2707], 13);
 
-        let tracking = false;
-        let watchId = null;
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19
+}).addTo(map);
 
-        trackBtn.addEventListener("click", () => {
-            if (!tracking) {
-                tracking = true;
-                startTracking();
-                trackBtn.textContent = "Stop Tracking";
-                statusText.textContent = "Tracking Live...";
-            } else {
-                tracking = false;
-                stopTracking();
-                trackBtn.textContent = "Start Tracking Bus";
-                statusText.textContent = "Not Tracking";
-            }
-        });
+// Bus icon
+const busIcon = L.icon({
+    iconUrl: "https://cdn-icons-png.flaticon.com/512/201/201818.png",
+    iconSize: [40, 40]
+});
 
-        function startTracking() {
-            if (!navigator.geolocation) {
-                alert("GPS not supported on this device");
-                return;
-            }
+// Bus markers
+const busMarkers = {};
+const lastPosition = {};
 
-            watchId = navigator.geolocation.watchPosition((pos) => {
-                const lat = pos.coords.latitude;
-                const lng = pos.coords.longitude;
+// Firebase listener
+onValue(ref(db, "buses"), (snapshot) => {
+    const data = snapshot.val();
+    if (!data) return;
 
-                // Update bus1 location in Firebase 🚍
-                update(ref(db, "buses/bus1"), { lat, lng });
+    Object.keys(data).forEach(busId => {
+        const { lat, lng, lastUpdated } = data[busId];
 
-            }, (err) => {
-                console.error(err);
-                alert("Unable to get location!");
-            }, {
-                enableHighAccuracy: true,
-                maximumAge: 0,
-                timeout: 5000
-            });
+        let status = "Stopped";
+        if (lastPosition[busId]) {
+            const diff =
+                Math.abs(lat - lastPosition[busId].lat) +
+                Math.abs(lng - lastPosition[busId].lng);
+            if (diff > 0.0001) status = "Moving";
         }
 
-        function stopTracking() {
-            if (watchId) {
-                navigator.geolocation.clearWatch(watchId);
-            }
+        lastPosition[busId] = { lat, lng };
+
+        const time = new Date(lastUpdated).toLocaleTimeString();
+
+        if (!busMarkers[busId]) {
+            busMarkers[busId] = L.marker([lat, lng], { icon: busIcon }).addTo(map);
+        } else {
+            busMarkers[busId].setLatLng([lat, lng]);
         }
-    </script>
+
+        busMarkers[busId].bindPopup(
+            `<b>${busId.toUpperCase()}</b><br>
+             Status: ${status}<br>
+             Last Updated: ${time}`
+        );
+    });
+});
+
+// Bus Stops
+const busStops = [
+    { name: "Stop 1", lat: 13.0850, lng: 80.2750 },
+    { name: "Stop 2", lat: 13.0900, lng: 80.2800 },
+    { name: "Stop 3", lat: 13.0950, lng: 80.2850 }
+];
+
+busStops.forEach(stop => {
+    L.marker([stop.lat, stop.lng])
+        .addTo(map)
+        .bindPopup(stop.name);
+});
+
+</script>
 
 </body>
 </html>
