@@ -3,7 +3,6 @@
 <head>
     <title>Smart School Bus Tracking</title>
 
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
     <style>
@@ -30,10 +29,8 @@
 <h1>Smart School Bus Live Tracking</h1>
 <div id="map"></div>
 
-<!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-<!-- Firebase -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
@@ -58,13 +55,7 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19
 }).addTo(map);
 
-// Bus icon
-const busIcon = L.icon({
-    iconUrl: "https://cdn-icons-png.flaticon.com/512/201/201818.png",
-    iconSize: [40, 40]
-});
-
-// Bus markers
+// Store markers & last positions
 const busMarkers = {};
 const lastPosition = {};
 
@@ -75,6 +66,8 @@ onValue(ref(db, "buses"), (snapshot) => {
 
     Object.keys(data).forEach(busId => {
         const { lat, lng, lastUpdated } = data[busId];
+
+        const busNumber = busId.replace("bus", "");
 
         let status = "Stopped";
         if (lastPosition[busId]) {
@@ -88,33 +81,41 @@ onValue(ref(db, "buses"), (snapshot) => {
 
         const time = new Date(lastUpdated).toLocaleTimeString();
 
+        // NUMBER ICON (NO IMAGE)
+        const numberIcon = L.divIcon({
+            html: `
+                <div style="
+                    background:#ff5722;
+                    color:white;
+                    width:34px;
+                    height:34px;
+                    border-radius:50%;
+                    text-align:center;
+                    line-height:34px;
+                    font-weight:bold;
+                    font-size:16px;
+                    border:2px solid white;
+                    box-shadow:0 0 6px rgba(0,0,0,0.4);
+                ">
+                    ${busNumber}
+                </div>
+            `,
+            className: ""
+        });
+
         if (!busMarkers[busId]) {
-            busMarkers[busId] = L.marker([lat, lng], { icon: busIcon }).addTo(map);
+            busMarkers[busId] = L.marker([lat, lng], { icon: numberIcon }).addTo(map);
         } else {
             busMarkers[busId].setLatLng([lat, lng]);
         }
 
         busMarkers[busId].bindPopup(
-            `<b>${busId.toUpperCase()}</b><br>
+            `<b>Bus ${busNumber}</b><br>
              Status: ${status}<br>
              Last Updated: ${time}`
         );
     });
 });
-
-// Bus Stops
-const busStops = [
-    { name: "Stop 1", lat: 13.0850, lng: 80.2750 },
-    { name: "Stop 2", lat: 13.0900, lng: 80.2800 },
-    { name: "Stop 3", lat: 13.0950, lng: 80.2850 }
-];
-
-busStops.forEach(stop => {
-    L.marker([stop.lat, stop.lng])
-        .addTo(map)
-        .bindPopup(stop.name);
-});
-
 </script>
 
 </body>
